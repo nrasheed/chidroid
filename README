@@ -12,7 +12,7 @@ git commit
 -m commit message
 --dry-run
 
-git push
+git push origin master
 
 --dry-run
 
