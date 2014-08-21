@@ -1,0 +1,54 @@
+C.H.I.DROID
+
+git add
+-A stages All
+. stages new and modified, without deleted
+-u stages modified and deleted, without new
+--dry-run
+
+
+git commit
+-a automatically stage all added files ( will not stage un-added files)  
+-m commit message
+--dry-run
+
+git push
+
+--dry-run
+
+
+
+
+nrasheed@oversoul ~/Desktop/data1/pers $ mkdir chidroid
+nrasheed@oversoul ~/Desktop/data1/pers $ cd chidroid/
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git init
+Initialized empty Git repository in /mnt/data1/pers/chidroid/.git/
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ touch README
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git config user.name nrasheed
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git config user.email nrasheed@accertify.com
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git config --list
+user.name=Nabeel Rasheed
+user.email=nrasheed@accertify.com
+core.excludesfile=/home/nrasheed/.gitignore
+core.repositoryformatversion=0
+core.filemode=true
+core.bare=false
+core.logallrefupdates=true
+user.name=nrasheed
+user.email=nrasheed@accertify.com
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git add README
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git commit
+Aborting commit due to empty commit message.
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git --version
+git version 1.8.3.2
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git commit -am ''
+Aborting commit due to empty commit message.
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git commit -am '.'
+[master (root-commit) e6f3f87] .
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 README
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git remote add origin https://github.com/nrasheed/chidroid.git
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git push --help
+nrasheed@oversoul ~/Desktop/data1/pers/chidroid $ git push origin master
+
+
