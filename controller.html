@@ -1,0 +1,329 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="Content-Style-Type" content="text/css">
+    <title>Step a Sketch Controller</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+    <script type="text/javascript">
+    /* ----------------- base utils -----------------*/
+    function $() { return document.getElementById(arguments[0]); }
+    function $F() { return document.getElementById(arguments[0]).value; }
+    function getKeyCode(ev) { if (window.event) return window.event.keyCode; return ev.keyCode; }     
+    function syncAjax(url,data) {
+      var ajax = new XMLHttpRequest(); 
+      try {
+          ajax.open("POST", url, false);
+          ajax.setRequestHeader("Content-type", "text/plain");
+          ajax.send(data);
+      } catch (e) {console.log('exception:' + e);}
+      return ajax.responseText;                
+    }
+    /* ----------------- base utils -----------------*/
+          
+          
+    // basic drawing related ..................................................    
+    var CANVAS;
+    var CTX;
+
+    function init() {
+        CANVAS = document.getElementById('plot');
+        CTX = CANVAS.getContext('2d');    
+        clearCanvas();
+    }
+    
+    function clearCanvas() {
+        CTX.clearRect(0, 0, CANVAS.width, CANVAS.height);
+        CTX.strokeStyle = "#000000";
+        CTX.strokeRect(0, 0, 800, 500);     
+    }
+
+
+
+    // manual line drawing related ..................................................
+    var P1 = null;
+    var P2 = null;    
+    function getCoordinates(e) {
+        var x = e.clientX;
+        var y = e.clientY;
+        $("xycoordinates").innerHTML = "(" + x + "," + y + ")";
+    }
+    function clearCoordinates() {
+        $("xycoordinates").innerHTML = "";
+    }
+    function canvasClicked(e) {
+        var markerSize = 6;
+        var x = e.clientX;
+        var y = e.clientY;   
+        baseDrawLine(x,y-markerSize,x,y+markerSize);     
+        baseDrawLine(x-markerSize,y,x+markerSize,y); 
+        if (null == P1) {
+            P1 = {};
+            P1.x = x;
+            P1.y = y;
+        } else {
+            P2 = {};
+            P2.x = x;
+            P2.y = y;
+        }
+    }
+    function manualLine() {
+        drawLine (P1.x, P1.y, P2.x, P2.y);
+    }
+
+
+
+
+
+
+    // machine drawing related ..................................................
+    /*      
+            q    determinant      m  dx  dy
+            -------------------------------
+            a  x1 > x2, y1 > y2,  +  -   -
+            b  x1 < x2, y1 > y2,  -  +   -
+            c  x1 < x2, y1 < y2,  +  +   +
+            d  x1 > x2, y1 < y2,  -  -   +        
+    */     
+
+    /*
+        drawing primitive function from the underlying system.
+    */
+    function baseDrawLine(fromX, fromY, toX, toY) {
+        //console.log('from:' + fromX + ',' + fromY + ' to:' + toX + ',' + toY);
+        CTX.lineWidth = 1;
+        CTX.strokeStyle = "#000000";
+        CTX.beginPath();
+        CTX.moveTo(fromX, fromY);
+        CTX.lineTo(toX, toY);
+        CTX.stroke();
+    }
+
+
+    // suports simulating the stepper motor drive
+    function stepDrawLine(fromX, fromY, toX, toY) {
+        
+        var relX = toX - fromX;
+        var relY = toY - fromY;
+        
+        if (relX < 0)
+            stepRender('L', Math.abs(relX), fromX, fromY);
+        else
+            stepRender('R', Math.abs(relX), fromX, fromY);
+            
+        if (relY < 0)
+            stepRender('U', Math.abs(relY), fromX, fromY);
+        else
+            stepRender('D', Math.abs(relY), fromX, fromY);        
+    }
+    
+    // simulates the stepper motor drive on the device
+    function stepRender(direction, steps, startingX, startingY) {
+
+        switch (direction) {
+            case 'L':
+                baseDrawLine(startingX, startingY, startingX-steps, startingY);
+                break;
+            case 'R':
+                baseDrawLine(startingX, startingY, startingX+steps, startingY);
+                break;
+            case 'U':
+                baseDrawLine(startingX, startingY, startingX, startingY-steps);
+                break;
+            case 'D':
+                baseDrawLine(startingX, startingY, startingX, startingY+steps);
+                break;
+            default:
+                break;
+        }   
+        
+        if (! $('simulate_switch').checked)
+            toDevice(direction, steps);
+    }
+
+    /*
+        calculates the interpolated points for straight line
+    */
+    function drawLine(fromX, fromY, toX, toY) {
+        console.log('from:' + fromX + ',' + fromY + ' to:' + toX + ',' + toY);
+        if (fromX == toX || fromY == toY) {
+            console.log('X\'s or Y\'s equal');
+            //baseDrawLine(fromX, fromY, toX, toY);
+            stepDrawLine(fromX, fromY, toX, toY);
+            return;
+        }
+        
+        var P_next = {};
+        var P_current = {};
+        P_current.x = fromX;
+        P_current.y = fromY;
+        
+        var slope_m = Math.abs((toY - fromY) / (toX - fromX));    
+        var slope_type = (fromX > toX) ? ((fromY > toY) ? 'A' : 'D') : ((fromY > toY) ? 'B' : 'C');
+        var is_slope_upward = slope_m > 1;
+        console.log('slope_m = ' + slope_m + ' is_slope_upward = ' + is_slope_upward + ' slope_type = ' + slope_type);
+        var step_range = (is_slope_upward) ? Math.abs(fromY - toY) : Math.abs(fromX - toX);
+        console.log('step_range ' + step_range);
+        
+        for (var step = 1; step < step_range; step++) {
+            var relX = (is_slope_upward) ? Math.round(step / slope_m) : step;
+            var relY = (is_slope_upward) ? step : Math.round(step * slope_m);
+            switch (slope_type) {
+                case 'A':
+                    relX = -relX;
+                    relY = -relY;
+                    break;
+                case 'B':
+                    relY = -relY;
+                    break;
+                case 'D':
+                    relX = -relX;
+                    break;
+                default:
+                    break;
+            }
+            P_next.x = fromX + relX;
+            P_next.y = fromY + relY;            
+            //console.log('rel ' + relX + ' ' + relY + ' Pc:' + P_current.x + ',' + P_current.y + ' Pn:' + P_next.x + ',' + P_next.y);
+            //baseDrawLine(P_current.x, P_current.y, P_next.x, P_next.y);
+            stepDrawLine(P_current.x, P_current.y, P_next.x, P_next.y);
+            P_current.x = P_next.x;
+            P_current.y = P_next.y;
+        }
+    }        
+    
+
+
+
+
+
+
+    function processInput() {
+
+        var lines = $F('textarea1').split('\n');
+        var prevX = -1;
+        var prevY = -1;
+        for (var i = 0; i < lines.length; i++) {
+            var currX = -1;
+            var currY = -1;
+            var line = lines[i];
+            if (line.indexOf('G00') == 0 || line.indexOf('G01') == 0) {
+                var parts = line.split(' ');
+                if (parts.length > 2) {
+                    if (parts[1].indexOf('X') == 0) 
+                        currX = parseInt(parts[1].substring(1)); // cast to wholenumber
+                    if (parts[2].indexOf('Y') == 0) 
+                        currY = parseInt(parts[2].substring(1)); // cast to wholenumber
+                    if (currX > -1 && currY > -1) {
+                        console.log('x,y:' + currX + ',' + currY);
+                        console.log(prevX + ',' + prevY);
+                        if (prevX != -1 && prevY != -1) {
+                            //baseDrawLine(prevX, prevY, currX, currY);
+                            drawLine(prevX, prevY, currX, currY);
+                        }
+                        prevX = currX;
+                        prevY = currY;
+                    }
+                }
+            }
+        }
+    }
+
+
+    // device communication related .................................................
+    
+    function deviceCommand(ref) {
+        var command = ref.id.substring(0,1);
+        var value = $F(command + '_value');
+        $('comm_log').innerHTML = command + value + '<br />';
+        var response = toDevice(command, value);
+        $('comm_log').innerHTML += response;
+    }
+    
+    function toDevice(command, value) {
+        return response = syncAjax('/', command + value);
+    }
+    
+    
+
+    function test() {
+
+    }
+          
+    </script>
+    <style media="screen" type="text/css">
+        body,table, button {font-family:verdana,helvetica,arial,sans-serif;margin:0px;font-size:10px;}
+        button {cursor:pointer;}
+        input {border: solid 1px gray;}
+        input.d_input {width:24px;}
+
+    </style>
+</head>
+<body onload="init()">
+    <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+        <td valign="top" width="800">
+    <canvas id="plot" width="800" height="500" style="background-color:#DCDCDC;" onmousemove="getCoordinates(event)" onmouseout="clearCoordinates()" onclick="canvasClicked(event)">
+    <p>browser doesn't support canvas.</p>
+    </canvas>    
+    <table width="100%">
+      <tr>
+        <td>
+          <button onclick="clearCanvas();P1=P2=null;">clear canvas</button>         
+          <button onclick="manualLine()" title="draw line between 2 points picked on canvas">line</button>
+        </td>
+        <td align="right"><span id="xycoordinates"></span></td>      
+      </tr>
+    </table>
+        </td>
+        <td valign="top">
+    G-code to be processed:<br />        
+    <textarea id="textarea1" rows="30" cols="40">
+
+    </textarea>
+    <br />
+    <button onclick="processInput()">process</button> <input type="checkbox" id="simulate_switch" checked="checked" /> simulate
+        </td>
+    </tr>    
+    </table>    
+    
+    <hr />
+    
+    <table>
+      <tr>
+        <td valign="top">
+             <table style="padding:5px;">
+              <tr><td colspan="2">serial port
+                                 <button id="o_command" onClick="deviceCommand(this)">open</button><input type="hidden" id="o_value" value="" />
+                                 <button id="c_command" onClick="deviceCommand(this)">close</button><input type="hidden" id="c_value" value="" />
+                  <hr /></td></tr>
+              <tr><td><input type="text" class="d_input" id="i_value" maxlength="3" /></td><td><button id="i_command" onclick="deviceCommand(this)">set pause</button></td></tr>
+              <tr><td><input type="text" class="d_input" id="s_value" maxlength="3" /></td><td><button id="s_command" onclick="deviceCommand(this)">set dwell</button></td></tr>
+              <tr><td colspan="2"><hr /><div id="comm_log" /></td></tr>
+             </table>       
+        </td>
+        <td>
+            <table style="border:1px solid gray;padding:5px;">
+                <tr align="middle"><td colspan="2"></td><td><input type="text" class="d_input" id="U_value" maxlength="3" /></td><td colspan="2"></td></tr>
+                <tr align="middle"><td colspan="2"></td><td><button id="U_command" onclick="deviceCommand(this)">U</button></td><td colspan="2"></td></tr>
+                <tr align="middle"><td><input type="text" class="d_input" id="L_value" maxlength="3" /></td>
+                                   <td><button id="L_command" onclick="deviceCommand(this)">L</button></td>
+                                   <td></td><td><button id="R_command" onclick="deviceCommand(this)">R</button></td>
+                                   <td><input type="text" class="d_input" id="R_value" maxlength="3" /></td></tr>
+                <tr align="middle"><td colspan="2"></td><td><button id="D_command" onclick="deviceCommand(this)">D</button></td><td colspan="2"></td></tr>
+                <tr align="middle"><td colspan="2"></td><td><input type="text" class="d_input" id="D_value" maxlength="3" /></td><td colspan="2"></td></tr>
+            </table>        
+        </td>
+      </tr>
+    </table>
+    
+
+    
+    
+
+    
+    
+</body>
+</html>   
